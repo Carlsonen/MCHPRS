@@ -19,6 +19,8 @@ use std::ops::Add;
 use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Instant;
+use std::fs;
+use chrono;
 
 // Parses a relative or absolute coordinate relative to a reference coordinate
 fn parse_relative_coord<F: FromStr + Add + Add<Output = F>>(
@@ -47,6 +49,8 @@ impl Plot {
             "visit" | "v" => "plots.visit",
             "teleport" | "tp" => "plots.visit",
             "lock" | "unlock" => "plots.lock",
+            "save" | "s" => "plots.visit",
+            "backup" => "plots.visit",
             _ => {
                 self.players[player].send_error_message("Invalid argument for /plot");
                 return;
@@ -161,6 +165,39 @@ impl Plot {
                     self.players[player].send_system_message("You are now unlocked.");
                 } else {
                     self.players[player].send_system_message("You are not locked to this plot.");
+                }
+            }
+            "save" | "s" => {
+                self.save();
+                self.players[player].save();    
+                
+                self.players[player].send_system_message("Saved plot and player.");
+            },
+            "backup" => {
+                self.save();
+
+                let datetime = chrono::offset::Local::now()
+                    .to_string()                    // YYYY-MM-DD HH:MM:SS.xxxxxxxx
+                    .split(".")
+                    .take(1)                    
+                    .collect::<String>()            // YYYY-MM-DD HH:MM:SS
+                    .replace(":", "-");             // YYYY-MM-DD HH-MM-SS
+
+                let postfix = args.join("_");
+
+                let plot_filename = format!("p{},{}", self.world.x, self.world.z);
+                let plot_filepath = format!("./world/plots/{}", plot_filename);
+                let backup_filepath = format!("./plot_backups/{} - {} {}", plot_filename, datetime, postfix);
+                
+                fs::create_dir_all("./plot_backups").unwrap();
+
+                match fs::copy(plot_filepath, backup_filepath) {
+                    Ok(_) => {
+                        self.players[player].send_system_message("Backup was successfully created.");
+                    }
+                    Err(e) => {
+                        println!("{}", e);
+                    }
                 }
             }
             _ => self.players[player].send_error_message("Invalid argument for /plot"),
